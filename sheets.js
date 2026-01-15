@@ -1,219 +1,88 @@
 /**
- * Google Sheets API wrapper for QBWC Bridge
+ * Google Apps Script API wrapper for QBWC Bridge
  *
- * Reads clock entries from the Roster spreadsheet's ClockLog sheet
- * and marks entries as synced after successful QB import.
+ * Calls the Apps Script web app endpoints to read/write clock data.
+ * This avoids the need for service account keys.
  */
-
-const { google } = require('googleapis');
 
 // Configuration - set via environment variables
 const CONFIG = {
-  spreadsheetId: process.env.ROSTER_SHEET_ID || '',
-  clockLogSheet: 'ClockLog',
-  // Column indices (0-based) - update if sheet structure changes
-  columns: {
-    ID: 0,
-    EmployeeId: 1,
-    EmployeeName: 2,
-    ClockIn: 3,
-    ClockOut: 4,
-    RequiresTicket: 5,
-    TicketId: 6,
-    TicketHeaderId: 7,
-    TicketLineId: 8,
-    CustomerId: 9,
-    CustomerName: 10,
-    JobId: 11,
-    JobName: 12,
-    ShopHours: 13,
-    OtherHours: 14,
-    TotalHours: 15,
-    Status: 16,
-    Notes: 17,
-    CreatedAt: 18,
-    UpdatedAt: 19,
-    QBSynced: 20  // New column we'll add
-  }
+  // Apps Script web app URL (deployed as "Execute as: Me", "Who has access: Anyone")
+  appsScriptUrl: process.env.APPS_SCRIPT_URL || '',
+  // API secret for authentication
+  apiSecret: process.env.QBWC_API_SECRET || 'TrippInQB2026!'
 };
-
-let sheetsClient = null;
-
-/**
- * Get authenticated Sheets API client
- */
-async function getSheetsClient() {
-  if (sheetsClient) return sheetsClient;
-
-  let authClient;
-
-  // Check for service account credentials in environment variable
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    authClient = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
-    });
-  } else {
-    // Fall back to Application Default Credentials (works on GCP)
-    authClient = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
-    });
-  }
-
-  const client = await authClient.getClient();
-  sheetsClient = google.sheets({ version: 'v4', auth: client });
-
-  return sheetsClient;
-}
 
 /**
  * Get clock entries that need to be synced to QuickBooks
- * Returns entries where Status = 'COMPLETE' and QBSynced != 'TRUE'
+ * Calls the Apps Script ?action=qbpending endpoint
+ * @returns {Promise<Array>} Array of pending entries
  */
 async function getQBSyncPendingEntries() {
-  if (!CONFIG.spreadsheetId) {
-    throw new Error('ROSTER_SHEET_ID environment variable not set');
+  if (!CONFIG.appsScriptUrl) {
+    throw new Error('APPS_SCRIPT_URL environment variable not set');
   }
 
-  const sheets = await getSheetsClient();
+  const url = `${CONFIG.appsScriptUrl}?action=qbpending&secret=${encodeURIComponent(CONFIG.apiSecret)}`;
 
-  // Read all data from ClockLog
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: CONFIG.spreadsheetId,
-    range: `${CONFIG.clockLogSheet}!A:U`,  // A through U (21 columns)
-    valueRenderOption: 'UNFORMATTED_VALUE',
-    dateTimeRenderOption: 'FORMATTED_STRING'
+  console.log('Fetching pending entries from Apps Script...');
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
   });
 
-  const rows = response.data.values || [];
-  if (rows.length <= 1) {
-    return [];  // Only header row or empty
+  if (!response.ok) {
+    throw new Error(`Apps Script returned ${response.status}: ${response.statusText}`);
   }
 
-  const headers = rows[0];
-  const pendingEntries = [];
+  const result = await response.json();
 
-  // Find QBSynced column index (might not exist yet)
-  let qbSyncedIdx = headers.indexOf('QBSynced');
-
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-
-    // Build entry object
-    const entry = {};
-    for (let j = 0; j < headers.length; j++) {
-      entry[headers[j]] = row[j] || '';
-    }
-    entry._rowIndex = i + 1;  // 1-based row number for updates
-
-    // Check if entry needs sync:
-    // - Status = 'COMPLETE'
-    // - QBSynced != 'TRUE'
-    const status = String(entry.Status || '').toUpperCase();
-    const qbSynced = String(entry.QBSynced || '').toUpperCase();
-
-    if (status === 'COMPLETE' && qbSynced !== 'TRUE') {
-      // Validate required fields
-      if (entry.EmployeeName && entry.TotalHours) {
-        pendingEntries.push(entry);
-      }
-    }
+  if (!result.ok) {
+    throw new Error(result.error || 'Unknown error from Apps Script');
   }
 
-  console.log(`Found ${pendingEntries.length} pending entries out of ${rows.length - 1} total`);
-  return pendingEntries;
+  console.log(`Apps Script returned ${result.entries?.length || 0} pending entries`);
+  return result.entries || [];
 }
 
 /**
  * Mark entries as synced to QuickBooks
- * Sets QBSynced = 'TRUE' for the given entry IDs
+ * Calls the Apps Script ?action=qbmarksync endpoint
+ * @param {string[]} entryIds - Array of entry IDs to mark as synced
  */
 async function markEntriesQBSynced(entryIds) {
-  if (!CONFIG.spreadsheetId || !entryIds || entryIds.length === 0) {
+  if (!CONFIG.appsScriptUrl || !entryIds || entryIds.length === 0) {
     return;
   }
 
-  const sheets = await getSheetsClient();
+  const url = `${CONFIG.appsScriptUrl}?action=qbmarksync&secret=${encodeURIComponent(CONFIG.apiSecret)}&ids=${encodeURIComponent(entryIds.join(','))}`;
 
-  // First, ensure QBSynced column exists
-  await ensureQBSyncedColumn(sheets);
+  console.log(`Marking ${entryIds.length} entries as synced...`);
 
-  // Get current data to find row indices
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: CONFIG.spreadsheetId,
-    range: `${CONFIG.clockLogSheet}!A:U`,
-    valueRenderOption: 'UNFORMATTED_VALUE'
-  });
-
-  const rows = response.data.values || [];
-  const headers = rows[0] || [];
-  const idIdx = headers.indexOf('ID');
-  const qbSyncedIdx = headers.indexOf('QBSynced');
-
-  if (idIdx === -1 || qbSyncedIdx === -1) {
-    throw new Error('Required columns not found');
-  }
-
-  // Prepare batch update
-  const updates = [];
-
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const rowId = String(row[idIdx] || '');
-
-    if (entryIds.includes(rowId)) {
-      // Column letter for QBSynced (A=1, B=2, ... U=21)
-      const colLetter = String.fromCharCode(65 + qbSyncedIdx);
-      updates.push({
-        range: `${CONFIG.clockLogSheet}!${colLetter}${i + 1}`,
-        values: [['TRUE']]
-      });
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
     }
-  }
-
-  if (updates.length > 0) {
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: CONFIG.spreadsheetId,
-      requestBody: {
-        valueInputOption: 'RAW',
-        data: updates
-      }
-    });
-    console.log(`Marked ${updates.length} entries as QB synced`);
-  }
-}
-
-/**
- * Ensure QBSynced column exists in ClockLog sheet
- */
-async function ensureQBSyncedColumn(sheets) {
-  // Get headers
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: CONFIG.spreadsheetId,
-    range: `${CONFIG.clockLogSheet}!1:1`
   });
 
-  const headers = response.data.values?.[0] || [];
-
-  if (!headers.includes('QBSynced')) {
-    // Add QBSynced header to next available column
-    const nextCol = String.fromCharCode(65 + headers.length);  // A=0, B=1, ...
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: CONFIG.spreadsheetId,
-      range: `${CONFIG.clockLogSheet}!${nextCol}1`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [['QBSynced']]
-      }
-    });
-    console.log(`Added QBSynced column at ${nextCol}`);
+  if (!response.ok) {
+    throw new Error(`Apps Script returned ${response.status}: ${response.statusText}`);
   }
+
+  const result = await response.json();
+
+  if (!result.ok) {
+    throw new Error(result.error || 'Failed to mark entries as synced');
+  }
+
+  console.log(`Successfully marked ${result.count || 0} entries as QB synced`);
 }
 
 module.exports = {
   getQBSyncPendingEntries,
-  markEntriesQBSynced,
-  ensureQBSyncedColumn
+  markEntriesQBSynced
 };

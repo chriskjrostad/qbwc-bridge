@@ -8,8 +8,6 @@
     "start:gcp": "functions-framework --target=qbwcHandler"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.3.0",
-    "googleapis": "^126.0.0",
     "xml2js": "^0.6.2"
   },
   "engines": {

@@ -543,7 +543,7 @@ function getWSDL() {
 
   <service name="QBWebConnectorSvc">
     <port name="QBWebConnectorSvcSoap" binding="tns:QBWebConnectorSvcSoap">
-      <soap:address location="REPLACE_WITH_CLOUD_FUNCTION_URL"/>
+      <soap:address location="https://qbwc-bridge-pn62.onrender.com/qbwc"/>
     </port>
   </service>
 </definitions>`;

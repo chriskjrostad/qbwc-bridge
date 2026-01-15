@@ -4,7 +4,8 @@
   <AppID></AppID>
   <AppURL>https://qbwc-bridge-pn62.onrender.com</AppURL>
   <AppDescription>Syncs employee time entries from Tripp In maintenance portal to QuickBooks</AppDescription>
-  <AppSupport>https://trippintrucking.com/support</AppSupport>
+  <AppSupport>https://qbwc-bridge-pn62.onrender.com/support</AppSupport>
+  <CertURL>https://qbwc-bridge-pn62.onrender.com</CertURL>
   <UserName>trippinqb</UserName>
   <OwnerID>{90A44FB5-33D9-4815-AC85-B2C6D1F96D3A}</OwnerID>
   <FileID>{90A44FB5-33D9-4815-AC85-B2C6D1F96D3B}</FileID>

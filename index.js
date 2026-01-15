@@ -24,10 +24,33 @@ const sessions = new Map();
  * Main HTTP handler for Cloud Function
  */
 exports.qbwcHandler = async (req, res) => {
-  // Handle WSDL request
-  if (req.method === 'GET' && req.query.wsdl !== undefined) {
-    res.set('Content-Type', 'text/xml');
-    res.send(getWSDL());
+  // Handle GET requests (for certificate verification and support)
+  if (req.method === 'GET') {
+    // WSDL request
+    if (req.query.wsdl !== undefined) {
+      res.set('Content-Type', 'text/xml');
+      res.send(getWSDL());
+      return;
+    }
+
+    // Support page
+    if (req.url.includes('/support')) {
+      res.set('Content-Type', 'text/html');
+      res.send(`<!DOCTYPE html>
+<html><head><title>Tripp In Time Sync - Support</title></head>
+<body style="font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto;">
+<h1>Tripp In Time Sync</h1>
+<p>QuickBooks Web Connector integration for Tripp In maintenance portal.</p>
+<p>For support, contact your administrator.</p>
+</body></html>`);
+      return;
+    }
+
+    // Root GET - return simple OK for certificate verification
+    res.set('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html><head><title>QBWC Bridge</title></head>
+<body><h1>QBWC Bridge Active</h1><p>QuickBooks Web Connector endpoint.</p></body></html>`);
     return;
   }
 

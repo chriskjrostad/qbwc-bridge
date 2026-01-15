@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: qbwc-bridge
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ROSTER_SHEET_ID
+        value: 11Eewajj7kLiWwcPN-5IIjMWix7HHJJJ7wuaJlLuIq3o
+      - key: QBWC_PASSWORD
+        value: TrippIn2026QB!
+      - key: QBWC_USERNAME
+        value: trippinqb

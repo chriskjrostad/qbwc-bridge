@@ -45,12 +45,24 @@ let sheetsClient = null;
 async function getSheetsClient() {
   if (sheetsClient) return sheetsClient;
 
-  const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  });
+  let authClient;
 
-  const authClient = await auth.getClient();
-  sheetsClient = google.sheets({ version: 'v4', auth: authClient });
+  // Check for service account credentials in environment variable
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    authClient = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+  } else {
+    // Fall back to Application Default Credentials (works on GCP)
+    authClient = new google.auth.GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+  }
+
+  const client = await authClient.getClient();
+  sheetsClient = google.sheets({ version: 'v4', auth: client });
 
   return sheetsClient;
 }

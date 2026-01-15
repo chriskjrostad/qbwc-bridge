@@ -2,7 +2,7 @@
 <QBWCXML>
   <AppName>Tripp In Time Sync</AppName>
   <AppID></AppID>
-  <AppURL>https://qbwc-bridge-pn62.onrender.com</AppURL>
+  <AppURL>https://qbwc-bridge-pn62.onrender.com/qbwc</AppURL>
   <AppDescription>Syncs employee time entries from Tripp In maintenance portal to QuickBooks</AppDescription>
   <AppSupport>https://qbwc-bridge-pn62.onrender.com/support</AppSupport>
   <CertURL>https://qbwc-bridge-pn62.onrender.com</CertURL>

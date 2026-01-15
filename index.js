@@ -24,9 +24,12 @@ const sessions = new Map();
  * Main HTTP handler for Cloud Function
  */
 exports.qbwcHandler = async (req, res) => {
+  // Extract path from URL
+  const urlPath = req.url.split('?')[0];
+
   // Handle GET requests (for certificate verification and support)
   if (req.method === 'GET') {
-    // WSDL request
+    // WSDL request (at root or /qbwc)
     if (req.query.wsdl !== undefined) {
       res.set('Content-Type', 'text/xml');
       res.send(getWSDL());
@@ -46,6 +49,13 @@ exports.qbwcHandler = async (req, res) => {
       return;
     }
 
+    // /qbwc endpoint GET - return quick 200 OK
+    if (urlPath === '/qbwc' || urlPath === '/qbwc/') {
+      res.set('Content-Type', 'text/plain');
+      res.send('OK');
+      return;
+    }
+
     // Root GET - return simple OK for certificate verification
     res.set('Content-Type', 'text/html');
     res.send(`<!DOCTYPE html>
@@ -54,7 +64,7 @@ exports.qbwcHandler = async (req, res) => {
     return;
   }
 
-  // Handle SOAP POST
+  // Handle SOAP POST (at root or /qbwc)
   if (req.method === 'POST') {
     try {
       const soapBody = req.body;
